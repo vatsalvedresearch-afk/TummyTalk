@@ -1,0 +1,85 @@
+---
+description: Non-negotiable clinical safety and AI boundary rules
+alwaysApply: true
+---
+
+# Clinical safety constraints
+
+These are the hard constraints of the product. They are not preferences and they are
+not open to optimisation. If a request appears to conflict with one of these, stop and
+say so rather than implementing it.
+
+## 1. Deterministic capture
+
+Every question shown to a child or parent is pre-authored and paediatrician-approved,
+loaded from `lib/questions/`. No model output is ever rendered in a patient-facing view.
+
+```ts
+// ❌ NEVER — generative model between clinician intent and child screen
+const kidQuestion = await rephraseForChild(clinicianQuestion);
+
+// ✅ Fixed, authored, looked up by id
+const question = STANDARD_QUESTIONS.find((q) => q.id === "pain_present");
+```
+
+Clinicians cannot free-type questions for the child. They select from the standard set
+plus the approved supplementary library in `lib/questions/supplementary.ts`. Do not add
+a free-text question field to the clinician setup UI.
+
+## 2. The summary is a template render, not generated prose
+
+`buildSummary()` is a pure function: structured responses in, structured summary out.
+It must contain no network calls and no model involvement.
+
+```ts
+// ❌ NEVER
+const summary = await claude.summarise(responses);
+
+// ✅
+const summary: SessionSummary = buildSummary(responses, session);
+```
+
+Parent free text passes through **verbatim**. Never paraphrase, summarise, translate,
+or clean it up.
+
+## 3. AI is advisory, downstream, and clinician-gated
+
+The only generative call in the product suggests follow-up questions after the standard
+set completes. Rules:
+
+- Suggestions must be selected from or mapped to the approved supplementary library
+- Every suggestion carries `source: "ai_suggested"` and renders with a visible label
+- A suggestion reaches a patient view **only** after an explicit clinician approve action
+- There is no auto-approve, no bulk-approve, no "approve all" button, no config flag
+  that bypasses review — do not add one even if asked to "speed up the demo"
+- Suggestions are phrased as questions only, never as findings, impressions, or advice
+
+```ts
+// Enforce at the type level
+type Suggestion = { id: string; text: string; rationale: string; source: "ai_suggested" };
+type ApprovedQuestion = Suggestion & { approvedBy: ClinicianId; approvedAt: string };
+// Only ApprovedQuestion may be passed to session rendering
+```
+
+## 4. LLM calls are server-side only
+
+Anthropic calls live in `app/api/` route handlers. The API key is read from `.env`,
+never shipped to the client, never inlined, never placed in a `NEXT_PUBLIC_` variable.
+
+## 5. No clinical logic
+
+This app collects and displays. It does not score, stratify, flag severity, compute
+risk, or suggest a diagnosis. If a feature request implies interpretation of symptoms,
+flag it rather than building it.
+
+## 6. Provenance is mandatory
+
+Every captured response records who gave it: `"child" | "parent" | "proxy"`. This field
+is required in the schema and must be surfaced in the summary. It is clinically
+significant and must never be defaulted, inferred, or dropped for convenience.
+
+## 7. Out of scope, deliberately
+
+Safeguarding detection and escalation are not implemented. Do not add keyword scanning,
+risk flagging, or alerting on free text. A half-built safeguarding feature is worse than
+none. This gap is documented in the PRD.

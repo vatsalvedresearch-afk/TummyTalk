@@ -1,0 +1,70 @@
+---
+description: Testing conventions
+globs: **/*.test.ts,**/*.test.tsx,tests/**
+---
+
+# Testing
+
+Vitest + React Testing Library. Tests live beside the code as `*.test.ts(x)`.
+
+Write a test for every function with real logic. Cover the happy path, at least one
+edge case, and one error case.
+
+## Priority order
+The things most worth testing here are the ones that would be clinically wrong if they
+broke silently:
+
+1. `buildSummary()` — correct values, correct provenance, verbatim parent text
+2. Zod schema validation, especially LLM output parsing
+3. FHIR mapping
+4. Question definition integrity (see below)
+5. Child component interaction — that a tap records the value it claims to
+
+```ts
+describe("buildSummary", () => {
+  it("preserves parent free text verbatim", () => {
+    const summary = buildSummary([parentTextResponse("He's been off food since Tuesday.")], session);
+    expect(summary.parentNotes).toBe("He's been off food since Tuesday.");
+  });
+
+  it("marks proxy-captured responses as proxy", () => {
+    const summary = buildSummary([response({ source: "proxy" })], session);
+    expect(summary.items[0].source).toBe("proxy");
+  });
+
+  it("flags uniform response patterns as low confidence", () => {
+    const summary = buildSummary(nineIdenticalYesResponses(), session);
+    expect(summary.confidenceFlags).toContain("uniform_pattern");
+  });
+
+  it("makes no network calls", async () => {
+    const spy = vi.spyOn(globalThis, "fetch");
+    buildSummary(sampleResponses, session);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+```
+
+## Guard tests
+Some constraints are worth asserting in CI because a well-meaning refactor could
+quietly break them:
+
+- Every question in `lib/questions/` has an i18n key present in **all** locale files
+- Every question has a valid modality, a respondent, and at least one tier
+- No question in the child flow has a free-text modality
+- Suggestions cannot reach a session render path without an `approvedBy` field
+
+```ts
+it("every standard question is translated in every locale", () => {
+  for (const q of STANDARD_QUESTIONS) {
+    for (const locale of LOCALES) {
+      expect(messages[locale]).toHaveProperty(q.i18nKey);
+    }
+  }
+});
+```
+
+## Don't
+- Don't test Tailwind classes or exact copy
+- Don't snapshot-test child components — the illustrations will change constantly
+- Don't call the real Anthropic API in tests; use a fixture response

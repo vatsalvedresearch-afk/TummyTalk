@@ -1,0 +1,77 @@
+---
+description: Child-facing UI — visual-first design rules
+globs: components/child/**,app/(session)/**,lib/questions/**
+---
+
+# Child-facing UI
+
+The user is 5–12, possibly unwell, tired, or in pain, and may not be able to read.
+Their parent is watching. Attention budget is short and does not renew.
+
+## Visual first, words last
+
+Text is a label on a picture. It is never the thing carrying the meaning.
+
+- Every question and every response option has an icon or illustration
+- Max **10 words** of on-screen text per question, **3 words** per response option
+- If an item cannot be expressed visually, redesign or cut it — do not write it out
+- Every question has synchronised read-aloud audio in the active locale
+- A child who cannot read the screen at all must still be able to complete the session
+
+## No keyboard in the child flow
+
+No `<input type="text">`, no `<textarea>`, no free entry of any kind in
+`components/child/` or `app/(session)/child/`. All responses are taps on imagery.
+Parent free text is the only unstructured input in the product and lives in the
+parent segment only.
+
+## Build instruments as inline SVG
+
+The faces scale, body map, and Bristol chart are React components rendering inline
+`<svg>` with tappable regions — not raster images with hotspot overlays. Tap targets
+must stay accurate across screen sizes.
+
+```tsx
+// ✅ Tappable region carries its own value and label
+<path
+  d={REGIONS.upperAbdomen}
+  onClick={() => onSelect("upper_abdomen")}
+  role="button"
+  aria-label={t("bodyMap.upperAbdomen")}
+  className="cursor-pointer transition-colors"
+/>
+```
+
+## Interaction rules
+
+- **No timers, no scores, no failure states, no leaderboards.** Nothing that can be
+  lost, failed, or run out of.
+- Companion feedback is acknowledging, never evaluating. It reacts; it does not
+  approve or disapprove. Approval cues bias the next answer.
+- Every question has an "I don't know" / "I'd rather not say" option rendered at
+  **equal visual weight** to the real options. Never smaller, greyed, or tucked away.
+- No question is skippable, but the above always satisfies it.
+- Progress is spatial (a path with visible stops), not a percentage or "3 of 9".
+- Pause is always visible and always available. Sessions resume for 30 minutes.
+- Full-screen handoff card between the child and parent segments. Neither should ever
+  be unsure whose turn it is.
+
+## Bias mitigation
+
+- Randomise response option order where order is not semantically meaningful
+  (never randomise a faces scale or Bristol chart — those are ordinal)
+- Never phrase an item leadingly ("You haven't had any blood, have you?")
+- Yes/No is used only where the underlying clinical item is genuinely binary
+- Flag uniform response patterns and rapid completion as low-confidence in the summary
+
+## Age tiers
+
+Two content tiers, `"5-8"` and `"9-12"`, differing in vocabulary, illustration style,
+and number of response options. Tier is a property of question content in
+`lib/questions/`, not a runtime conditional scattered through components.
+
+## Motion
+
+Animation is what makes this feel like a companion rather than a form — but it must
+respect `prefers-reduced-motion`, never block input, and never delay a response being
+recorded.

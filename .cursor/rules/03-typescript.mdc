@@ -1,0 +1,82 @@
+---
+description: TypeScript and React coding conventions
+globs: **/*.ts,**/*.tsx
+---
+
+# TypeScript conventions
+
+## Style
+- Functional components with hooks only, no class components
+- Type all props with `interface`, not `type` (reserve `type` for unions and utilities)
+- Tailwind utility classes, no separate CSS files
+- Named exports, except for Next.js pages and layouts which require default
+
+## No `any`
+If you don't know the type, use `unknown` and narrow it. `any` is not permitted,
+including in test files and including as `as any` to silence an error.
+
+## Zod is the source of truth
+Define the schema, infer the type from it. Never hand-write a type that duplicates
+a schema.
+
+```ts
+// ✅
+export const ResponseSchema = z.object({
+  questionId: z.string(),
+  value: z.union([z.boolean(), z.number(), z.string()]),
+  source: z.enum(["child", "parent", "proxy"]),
+  answeredAt: z.string().datetime(),
+});
+export type Response = z.infer<typeof ResponseSchema>;
+
+// ❌ Type and schema drift apart within a week
+interface Response { questionId: string; value: unknown; }
+```
+
+Validate at every trust boundary: API route input, LLM output, database reads,
+FHIR construction.
+
+## Single responsibility
+Each function does one thing. If describing it needs the word "and", split it.
+
+```ts
+// ❌
+function saveResponsesAndBuildSummaryAndWriteFhir(r: Response[]) { ... }
+
+// ✅
+function saveResponses(r: Response[]): Promise<void> { ... }
+function buildSummary(r: Response[], s: Session): SessionSummary { ... }
+function toQuestionnaireResponse(s: SessionSummary): QuestionnaireResponse { ... }
+```
+
+## DRY
+Write the same logic twice, extract it. Shared logic between routes belongs in
+`lib/`, not copy-pasted across route handlers.
+
+## Component structure
+- One component per file
+- Over ~100 lines, extract sub-components
+- No fetch calls inside components — use `lib/api.ts` or a hook in `hooks/`
+- Child-facing instrument components take `value` and `onChange` and hold no
+  session state of their own
+
+## Questions are data, not code
+The standard nine and the supplementary library are typed config in `lib/questions/`.
+Adding a question means adding an entry there — never a new branch in a component.
+
+```ts
+export interface QuestionDef {
+  id: string;
+  modality: "yes_no" | "faces_scale" | "body_map" | "bristol" | "count" | "picture_choice";
+  instrument: string | null;   // e.g. "FPS-R", "Rome IV"
+  tier: ("5-8" | "9-12")[];
+  i18nKey: string;
+  respondent: "child" | "parent";
+  schema: z.ZodTypeAny;
+}
+```
+
+## Server boundary
+Anything touching the Anthropic key, the database service role, or PHI runs in
+`app/api/` or a server component. Mark client components `"use client"` explicitly
+and keep them thin.

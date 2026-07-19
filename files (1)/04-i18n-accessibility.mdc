@@ -1,0 +1,37 @@
+---
+description: Internationalisation and accessibility requirements
+globs: messages/**,components/**,app/**
+---
+
+# i18n and accessibility
+
+## Languages
+Launch locales: `en`, `ar`, `zh-Hans`, `vi`, `hi`.
+
+- **No hardcoded user-facing strings.** Every string goes through `next-intl`.
+- Content is human-translated and paediatrician-reviewed per locale. Do not generate
+  translations at runtime and do not machine-translate clinical items — a mistranslated
+  symptom question produces wrong clinical data.
+- Missing translation: fail loudly in dev, fall back to `en` in production. Never
+  render a raw i18n key to a patient.
+- `ar` requires full RTL. Mirror layout and directional icons; do **not** mirror the
+  body map, Bristol chart, or faces scale.
+- Child and parent segments render independently — the parent's locale may differ
+  from the child's.
+
+## Accessibility — WCAG 2.2 AA
+
+- Minimum **44×44px** touch targets everywhere, larger in the child flow
+- High-contrast mode and a dyslexia-friendly typeface option
+- All interactive SVG regions need `role` and `aria-label`
+- Never convey meaning by colour alone (matters for the stool colour picker —
+  pair every swatch with a label and icon)
+- Respect `prefers-reduced-motion`
+- Full keyboard navigability on clinician screens
+
+## Proxy mode
+Where a child cannot interact directly, the parent operates the device while the child
+indicates. Responses captured this way are recorded as `source: "proxy"`.
+
+This flag is **non-optional and clinically significant**. It must appear in the summary.
+Never default it, infer it, or drop it to simplify a data shape.

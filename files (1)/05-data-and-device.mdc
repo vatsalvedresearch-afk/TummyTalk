@@ -1,0 +1,43 @@
+---
+description: Data handling, privacy, and shared-device session rules
+globs: app/api/**,lib/**,app/(session)/**
+---
+
+# Data and shared-device rules
+
+The tablet is shared between patients. Assume the next family will pick it up thirty
+seconds after the last one puts it down.
+
+## Session hygiene
+- Hard session termination on completion or 30-minute timeout: full state clear
+- No patient data persists on the device after termination — no `localStorage`,
+  no `sessionStorage`, no IndexedDB cache of responses, no service worker retention
+- Disable autofill and predictive text on the parent free-text field
+- Kiosk assumptions: no exit to OS, no browser chrome, no external links anywhere
+  in the session flow
+- Unlocking out of a session requires clinician credential; the handover state is
+  patient-facing only
+
+## Offline
+Ward wifi is unreliable. Capture must work offline and sync on reconnect. A session
+lost at question eight will not be repeated — the child is done.
+
+## Privacy
+- No real patient data in this repo, ever. Fixtures and seeds are obviously fictional.
+- Never log response values, parent free text, or any identifier. Log session ids and
+  event types only.
+- No third-party analytics, error trackers, or CDN-hosted fonts that phone home
+- Parent free text is the highest-risk field in the product. It is the only unstructured
+  input sent to the model. Treat it accordingly: validate, never log, never cache.
+- Patient data is never used for model training. Do not add any feedback, rating, or
+  data-collection loop that would send responses anywhere but the EMR.
+
+## Audit
+Every session records: who initiated it, which follow-ups were suggested, which were
+approved or dismissed and by whom, and what was written where. Audit writes are not
+optional and are not batched away for performance.
+
+## FHIR
+Summary output maps to a `QuestionnaireResponse` resource plus a rendered PDF for human
+reading. Target a sandbox server only. Validate the resource against its schema before
+any write attempt — never construct FHIR JSON by string concatenation.

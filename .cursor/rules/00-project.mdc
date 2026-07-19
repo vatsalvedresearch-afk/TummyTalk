@@ -1,0 +1,52 @@
+---
+description: Tummy Talk project standards — stack, architecture, commands
+alwaysApply: true
+---
+
+# Tummy Talk — Paediatric GI Symptom Companion
+
+Shared-tablet app for paediatric GI wards. A clinician sets up a session, hands the
+tablet to a child (5–12) and their parent, they answer a fixed set of symptom
+questions, and the clinician gets a structured summary plus AI-suggested follow-ups.
+
+**Educational / competition prototype. Not a medical device. No real patient data, ever.**
+
+## Stack
+- Framework: Next.js 15 (App Router) + TypeScript, one repo for frontend and backend
+- Styling: Tailwind + shadcn/ui (clinician screens); custom inline SVG (child screens)
+- Animation: Motion (`motion/react`)
+- Validation: Zod, schemas shared between client and server
+- Data: Postgres via Supabase
+- i18n: next-intl
+- LLM: Anthropic API, server-side only
+- Package manager: pnpm
+
+## Architecture
+- `app/(clinician)/` — setup, review, follow-up approval screens
+- `app/(session)/` — child and parent question flow
+- `app/api/` — route handlers (the only place server work happens)
+- `lib/questions/` — the standard nine definitions, single source of truth
+- `lib/schemas/` — Zod schemas for responses, summaries, FHIR output
+- `lib/fhir/` — QuestionnaireResponse mapping
+- `components/child/` — child-facing visual components (faces scale, body map, Bristol chart)
+- `components/clinician/` — clinician-facing components
+- `messages/` — i18n message catalogues, one file per locale
+
+## Commands
+- Dev: `pnpm dev`
+- Test: `pnpm test`
+- Typecheck: `pnpm typecheck`
+- Lint: `pnpm lint`
+
+## Scope discipline
+Build only what the PRD specifies. Do NOT add without being asked:
+- Authentication beyond a stubbed clinician identity
+- Analytics, telemetry, or third-party trackers
+- Native mobile wrappers
+- Longitudinal / cross-admission tracking
+- Any diagnosis, triage, or clinical recommendation feature
+
+## Workflow
+- Commit after each working feature
+- Never commit `.env` or any file containing keys
+- Seed and demo data must be obviously fictional (e.g. "Test Patient A", DOB 2015-01-01)
