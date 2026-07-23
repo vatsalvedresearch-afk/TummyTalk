@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { ThemeBackground } from "@/components/child/ThemeBackground";
@@ -9,23 +9,32 @@ import { ProgressPath } from "@/components/child/ProgressPath";
 import { CompanionCharacter } from "@/components/child/CompanionCharacter";
 import { QuestionRenderer } from "@/components/child/QuestionRenderer";
 import { HandoffCard } from "@/components/child/HandoffCard";
+import { HandoffWelcome } from "@/components/child/HandoffWelcome";
 import { Button } from "@/components/ui/button";
 import { getThemeById } from "@/lib/themes/child-themes";
 import { getActiveChildQuestions } from "@/lib/questions/standard";
 import type { Session } from "@/lib/schemas/session";
-import type { ResponseSource } from "@/lib/schemas/response";
+import type { Response, ResponseSource } from "@/lib/schemas/response";
 
 interface ChildSessionFlowProps {
   session: Session;
+  exampleMode?: boolean;
 }
 
-export function ChildSessionFlow({ session: initialSession }: ChildSessionFlowProps) {
+function mergeResponse(responses: Response[], incoming: Response): Response[] {
+  return [...responses.filter((r) => r.questionId !== incoming.questionId), incoming];
+}
+
+export function ChildSessionFlow({ session: initialSession, exampleMode = false }: ChildSessionFlowProps) {
   const t = useTranslations("session");
   const router = useRouter();
 
   const [session, setSession] = useState(initialSession);
   const [theme, setTheme] = useState(session.childTheme);
-  const [currentIndex, setCurrentIndex] = useState(session.currentQuestionIndex);
+  const [showWelcome, setShowWelcome] = useState(
+    session.responses.length === 0 && session.status === "child",
+  );
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
   const [currentValue, setCurrentValue] = useState<unknown>(null);
   const [companionMood, setCompanionMood] = useState<"idle" | "acknowledge">("idle");
   const [paused, setPaused] = useState(false);
@@ -33,19 +42,54 @@ export function ChildSessionFlow({ session: initialSession }: ChildSessionFlowPr
   const [showHandoff, setShowHandoff] = useState(session.status === "handoff");
 
   const themeDef = getThemeById(theme);
-  const questions = getActiveChildQuestions(
-    session.enabledQuestionIds,
-    session.responses,
+
+  const questions = useMemo(
+    () =>
+      getActiveChildQuestions(
+        session.enabledQuestionIds,
+        session.responses,
+        session.ageTier,
+      ),
+    [session.enabledQuestionIds, session.responses, session.ageTier],
   );
-  const currentQuestion = questions[currentIndex];
+
+  const currentIndex = currentQuestionId
+    ? questions.findIndex((q) => q.id === currentQuestionId)
+    : 0;
+  const currentQuestion = questions[currentIndex >= 0 ? currentIndex : 0];
+
+  async function persistSession(patch: Partial<Session>) {
+    if (exampleMode) {
+      setSession((prev) => ({ ...prev, ...patch }));
+      return;
+    }
+
+    const res = await fetch(`/api/sessions/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+
+    if (res.ok) {
+      setSession(await res.json());
+    }
+  }
 
   async function saveResponse(questionId: string, value: unknown, source: ResponseSource) {
-    const response = {
+    const response: Response = {
       questionId,
-      value,
+      value: value as Response["value"],
       source,
       answeredAt: new Date().toISOString(),
     };
+
+    if (exampleMode) {
+      setSession((prev) => ({
+        ...prev,
+        responses: mergeResponse(prev.responses, response),
+      }));
+      return;
+    }
 
     const res = await fetch(`/api/sessions/${session.id}/responses`, {
       method: "POST",
@@ -54,46 +98,74 @@ export function ChildSessionFlow({ session: initialSession }: ChildSessionFlowPr
     });
 
     if (res.ok) {
-      const updated = await res.json();
-      setSession(updated);
+      setSession(await res.json());
     }
   }
 
   async function updateTheme(newTheme: typeof theme) {
     setTheme(newTheme);
     setShowThemePicker(false);
-    await fetch(`/api/sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ childTheme: newTheme }),
-    });
+    await persistSession({ childTheme: newTheme });
+  }
+
+  function beginQuestions() {
+    setShowWelcome(false);
+    setCurrentQuestionId(questions[0]?.id ?? null);
+    setCurrentValue(null);
   }
 
   async function handleAnswer() {
     if (!currentQuestion || currentValue === null) return;
 
     const source: ResponseSource = session.proxyMode ? "proxy" : "child";
+    const nextResponses = mergeResponse(session.responses, {
+      questionId: currentQuestion.id,
+      value: currentValue as Response["value"],
+      source,
+      answeredAt: new Date().toISOString(),
+    });
+
     await saveResponse(currentQuestion.id, currentValue, source);
 
     setCompanionMood("acknowledge");
     setTimeout(() => setCompanionMood("idle"), 600);
 
-    if (currentIndex >= questions.length - 1) {
-      await fetch(`/api/sessions/${session.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "handoff" }),
-      });
+    const updatedQuestions = getActiveChildQuestions(
+      session.enabledQuestionIds,
+      nextResponses,
+      session.ageTier,
+    );
+    const idx = updatedQuestions.findIndex((q) => q.id === currentQuestion.id);
+
+    if (idx >= updatedQuestions.length - 1) {
+      await persistSession({ status: "handoff" });
       setShowHandoff(true);
       return;
     }
 
-    setCurrentIndex((i) => i + 1);
+    setCurrentQuestionId(updatedQuestions[idx + 1].id);
     setCurrentValue(null);
   }
 
   function handleHandoffContinue() {
+    if (exampleMode) {
+      setShowHandoff(false);
+      setShowWelcome(true);
+      setSession((prev) => ({ ...prev, responses: [], status: "child" }));
+      setCurrentQuestionId(null);
+      return;
+    }
     router.push(`/${session.parentLocale}/session/${session.id}/parent`);
+  }
+
+  if (showWelcome && !showHandoff) {
+    return (
+      <HandoffWelcome
+        session={{ ...session, childTheme: theme }}
+        questionCount={questions.length}
+        onStart={beginQuestions}
+      />
+    );
   }
 
   if (showHandoff) {
@@ -144,12 +216,21 @@ export function ChildSessionFlow({ session: initialSession }: ChildSessionFlowPr
               {t("proxyBadge")}
             </span>
           )}
+          {exampleMode && (
+            <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-bold">
+              {t("exampleBadge")}
+            </span>
+          )}
           <Button variant="child" size="icon" onClick={() => setShowThemePicker(true)} aria-label={t("changeTheme")}>
             🎨
           </Button>
         </div>
 
-        <ProgressPath total={questions.length} current={currentIndex} accent={themeDef.accent} />
+        <ProgressPath
+          total={questions.length}
+          current={currentIndex >= 0 ? currentIndex : 0}
+          accent={themeDef.accent}
+        />
 
         <div className="flex justify-center py-4">
           <CompanionCharacter mood={companionMood} />

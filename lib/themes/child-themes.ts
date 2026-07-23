@@ -63,3 +63,7 @@ export const CHILD_THEMES: ChildThemeDef[] = [
 export function getThemeById(id: ChildTheme): ChildThemeDef {
   return CHILD_THEMES.find((theme) => theme.id === id) ?? CHILD_THEMES[0];
 }
+
+export function getThemeNameKey(id: ChildTheme): string {
+  return getThemeById(id).nameKey.replace("themes.", "");
+}

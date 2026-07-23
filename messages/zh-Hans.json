@@ -32,6 +32,7 @@
     "clinicianNote": "Context note (clinician only)",
     "clinicianNoteHint": "For your reference and AI follow-ups only. Never shown to child.",
     "startSession": "Hand device to child",
+    "previewChild": "Preview child view",
     "patientA": "Test Patient A",
     "patientB": "Test Patient B"
   },
@@ -59,7 +60,12 @@
     "finish": "Finish session",
     "completeTitle": "All done!",
     "completeHint": "Please return the tablet to your nurse.",
-    "changeTheme": "Change background"
+    "changeTheme": "Change background",
+    "welcomeTitle": "Hi there!",
+    "welcomeSubtitle": "Let's take a little journey together.",
+    "welcomeStops": "Stops on your path",
+    "welcomeStart": "Let's go!",
+    "exampleBadge": "Example preview"
   },
   "questions": {
     "painPresent": "Does your tummy hurt now?",

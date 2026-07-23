@@ -9,6 +9,7 @@ import { ThemePicker } from "@/components/child/ThemePicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LOCALES } from "@/i18n/routing";
+import { serializeSetupConfig } from "@/lib/session/setup-config";
 import type { AgeTier, ChildTheme } from "@/lib/schemas/session";
 
 const DEMO_PATIENTS = [
@@ -19,8 +20,8 @@ const DEMO_PATIENTS = [
 export function SetupForm({ locale }: { locale: string }) {
   const t = useTranslations("setup");
   const tApp = useTranslations("app");
+  const tQuestions = useTranslations("questions");
   const router = useRouter();
-
   const [patientIndex, setPatientIndex] = useState(0);
   const [ageTier, setAgeTier] = useState<AgeTier>("5-8");
   const [childLocale, setChildLocale] = useState(locale);
@@ -48,6 +49,21 @@ export function SetupForm({ locale }: { locale: string }) {
     });
   }
 
+  function previewConfigQuery() {
+    return serializeSetupConfig({
+      ageTier,
+      childLocale,
+      parentLocale,
+      childTheme,
+      enabledQuestionIds: enabledIds,
+      proxyMode,
+    });
+  }
+
+  function previewChildExperience() {
+    router.push(`/${childLocale}/example/child?${previewConfigQuery()}`);
+  }
+
   async function startSession() {
     setLoading(true);
     const patient = DEMO_PATIENTS[patientIndex];
@@ -72,7 +88,7 @@ export function SetupForm({ locale }: { locale: string }) {
 
     if (res.ok) {
       const session = await res.json();
-      router.push(`/${childLocale}/session/${session.id}`);
+      router.push(`/${childLocale}/example/child?sessionId=${session.id}`);
     }
     setLoading(false);
   }
@@ -169,7 +185,9 @@ export function SetupForm({ locale }: { locale: string }) {
             <CardTitle>{t("questions")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {STANDARD_QUESTIONS.map((q) => (
+            {STANDARD_QUESTIONS.map((q) => {
+              const key = q.i18nKey.replace("questions.", "");
+              return (
               <label key={q.id} className="flex items-center gap-3 rounded-lg p-2 hover:bg-slate-50">
                 <input
                   type="checkbox"
@@ -177,9 +195,10 @@ export function SetupForm({ locale }: { locale: string }) {
                   onChange={() => toggleQuestion(q.id)}
                   className="h-5 w-5"
                 />
-                <span className="text-sm">{q.id.replace(/_/g, " ")}</span>
+                <span className="text-sm">{tQuestions(key as never)}</span>
               </label>
-            ))}
+            );
+            })}
           </CardContent>
         </Card>
 
@@ -217,9 +236,14 @@ export function SetupForm({ locale }: { locale: string }) {
           </CardContent>
         </Card>
 
-        <Button size="lg" className="w-full" onClick={startSession} disabled={loading}>
-          {t("startSession")}
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button size="lg" variant="outline" className="flex-1" onClick={previewChildExperience}>
+            {t("previewChild")}
+          </Button>
+          <Button size="lg" className="flex-1" onClick={startSession} disabled={loading}>
+            {t("startSession")}
+          </Button>
+        </div>
       </div>
     </div>
   );

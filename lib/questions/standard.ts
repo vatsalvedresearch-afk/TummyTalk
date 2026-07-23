@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { QuestionDef } from "./types";
+import type { AgeTier } from "@/lib/schemas/session";
 
 export const STANDARD_QUESTIONS: QuestionDef[] = [
   {
@@ -103,10 +104,15 @@ export const STANDARD_QUESTIONS: QuestionDef[] = [
 export function getActiveChildQuestions(
   enabledIds: string[],
   responses: { questionId: string; value: unknown }[],
+  ageTier?: AgeTier,
 ): QuestionDef[] {
   const responseMap = new Map(responses.map((r) => [r.questionId, r.value]));
 
   return STANDARD_QUESTIONS.filter((question) => {
+    if (ageTier && !question.tier.includes(ageTier)) {
+      return false;
+    }
+
     if (!enabledIds.includes(question.id)) {
       return false;
     }
